@@ -192,10 +192,12 @@ Summarising the 2023 data, why not possible to add n?
 #names(Dxa2022y)[names(Dxa2022y) == 'TURB860'] <- 'Turbiditet'
 
 #Blir det riktig dersom vi tar gjennomsnitt med group station.name og date? spesielt med tanke på flomprøvene
+#particulate P is needed for later. must be renamed
+names(Dxa2023yy)[names(Dxa2023yy) == "TOTP_P"] <- "TOTPP"
 
 dx23_C <- Dxa2023yy %>%
   group_by(Station.name, Sample.dateS) %>%
-  select(Ca:DOC, NH4.N:POC, SiO2, TOC:TOTP, SPM:Turbiditet, As:Cd, Cr:Hg, Ni, Pb, Zn) %>% # select variables to summarise, from and to
+  select(Ca:DOC, NH4.N:POC, SiO2, TOC:TOTPP, SPM:Turbiditet, As:Cd, Cr:Hg, Ni, Pb, Zn) %>% # select variables to summarise, from and to
   summarise(across(everything(), .f = list(mean = mean), na.rm = TRUE))
 
 for ( col in 1:ncol(dx23_C)){
@@ -206,7 +208,7 @@ write.csv(dx23_C, "240624_CheckingDATA23_flood.csv", row.names=FALSE)
 
 dx23 <- dx23_C %>%
   group_by(Station.name) %>%
-  select(Ca:DOC, NH4.N:POC, SiO2, TOC:TOTP, SPM:Turbiditet, As:Cd, Cr:Hg, Ni, Pb, Zn) %>% # select variables to summarise, from and to
+  select(Ca:DOC, NH4.N:POC, SiO2, TOC:TOTPP, SPM:Turbiditet, As:Cd, Cr:Hg, Ni, Pb, Zn) %>% # select variables to summarise, from and to
   summarise(across(everything(), .f = list(mean = mean, sd=sd), na.rm = TRUE))
 
 #Reshape summary table
@@ -232,7 +234,7 @@ All <- rbind(df.sum23, foxy)
 #only those parameters with regular bargraphs, nothing special
 dfsum2 = All %>% filter(str_detect(chem,"Ca|Turbiditet|SPM|SiO2|TOC|TOTN|TOTP|As|Pb|Cd|Cu|Zn|Cr|PO4|pH|Ni"))
 ```
-
+Silica comes later with perfect y-axis label. 
 Use the following for making automatised figures with correct axis-titles. BUT make sure to only include those variables you will plot. 
 ```{r}
 #try TO MAKE NICER TITLES
@@ -402,68 +404,11 @@ dfsum3$Facet <- ifelse(dfsum3$Station.name == "Alna", 'Y',
                        ifelse(dfsum3$Station.name == "Orreelva", 'Y', "N"))
 ```
 
+
 - Silica, make nice y--axis title
 
 The plots are made manually since there are not that many plots and since different Station.names will be faceted.
 In the ggplot you need to specify the variable and the axis texts. 
-
-- TOTP
-```{r}
-#To make plots individually to individual optimization
-TOTP22 <- ggplot(subset(dfsum3, chem %in% c("TOTP")) , aes(x=Station.name, y=xmean, fill=year))  +
-  geom_col( width=0.8, position=position_dodge())+
-  geom_errorbar(aes(x=Station.name, ymin=pmax(xmean-xsd, 0), ymax=xmean+xsd),
-                width=.4,linewidth=0.4, position=position_dodge(width=0.8), col="black")+
-  theme_light()+
-  scale_fill_manual(values = c("orange", "dodgerblue2"))+
-  theme(axis.text.y = element_text(size= 16, colour="black"),
-        axis.title.x = element_blank(),
-        axis.title.y = element_text(size=20, margin=margin(0,20,0,0)),
-        axis.text.x = element_text(size = 16, angle=45, hjust=1,  colour="black"),
-        legend.title = element_blank(),
-        legend.text=element_text(size=16),
-        legend.spacing.x = unit(0.2, 'cm'),
-        plot.title = element_text(size = 24, hjust = 0.5),
-        panel.grid.major.x = element_blank(),
-        strip.background = element_blank(),
-        strip.text.x = element_blank())+
-  theme(legend.position="top")+
-  labs(title = "Total phosphorous", x = "", y = "Tot-P (µg/L)")+
-  facet_wrap(.~Facet, scales="free")+
-  scale_y_continuous(labels = fmt_dcimals(0))
-    
-```
-
-Some trixing needs to be done to make the facets have the approperiate width
-
-```{r}
-gp <- ggplotGrob(TOTP22)
-# optional: take a look at the grob object's layout
-gtable::gtable_show_layout(gp)
-
-# get gtable columns corresponding to the facets (5 & 9, in this case)
-facet.columns <- gp$layout$l[grepl("panel", gp$layout$name)]
-# get the number of unique x-axis values per facet (1 & 3, in this case)
-x.var <- sapply(ggplot_build(TOTP22)$layout$panel_scales_x,
-                function(l) length(l$range$range))
-
-# change the relative widths of the facet columns based on
-# how many unique x-axis values are in each facet
-gp$widths[facet.columns] <- gp$widths[facet.columns] * x.var
-
-# plot result
-plppy = grid::grid.draw(gp)
-
-print(plppy)
-print(gp)
-
-ggsave(filename = "output8/TOTP22_Facet.png",
-       plot = gp,
-       width = 11, height = 8.5, units = "in")
-
-```
-
-- Phosphate
 ```{r}
 #To make plots individually to individual optimization
 Si22_2 <- ggplot(subset(dfsum3, chem %in% c("SiO2")) , aes(x=Station.name, y=xmean, fill=year))  +
@@ -490,7 +435,6 @@ Si22_2 <- ggplot(subset(dfsum3, chem %in% c("SiO2")) , aes(x=Station.name, y=xme
 ```
 
 Some trixing needs to be done to make the facets have the approperiate width
-
 ```{r}
 ggsave(filename = "output8/Si22_2.png",
        plot = Si22_2,
@@ -677,8 +621,6 @@ ggsave(filename = "output8/Ni22_Facet.png",
 
 ```
 
-
-
 Some plotting variables that might be needed: 
 - scaling of y-axis: "coord_cartesian(ylim = c(0.0, 0.18))" and/or "scale_y_continuous(breaks=c(0,0.03, 0.06, 0.09, 0.12, 0.15, 0.18), labels = fmt_dcimals(1))" 
 
@@ -691,14 +633,22 @@ Variables: TOC+DOC,
   - for some variables, separate facet is needed when rivers differ
 
 Calculate the fractions that will be plotted. For the 2020 data only. 
+```{r}
+dx23_C$POC = dx23_C$TOC - dx23_C$DOC
+dx23_C$TDP = dx23_C$TOTP - dx23_C$TOTPP #NOT SURE IF THIS IS CORRECT
+dx23_C$Org.P = dx23_C$TOTP - dx23_C$PO4.P
+
+dx23_C$Org.N = dx23_C$TOTN - dx23_C$NO3.N - dx23_C$NH4.N
+dx23_C$TDN = dx23_C$TOTN - dx23_C$Nitrogen.part
+```
 
 ```{r}
-Dxa2023yy$POC = Dxa2023yy$TOC - Dxa2023yy$DOC
-Dxa2023yy$TDP = Dxa2023yy$TOTP - Dxa2023yy$TOTP_P #NOT SURE IF THIS IS CORRECT
-Dxa2023yy$Org.P = Dxa2023yy$TOTP - Dxa2023yy$PO4.P
+#Dxa2023yy$POC = Dxa2023yy$TOC - Dxa2023yy$DOC
+#Dxa2023yy$TDP = Dxa2023yy$TOTP - Dxa2023yy$TOTPP #NOT SURE IF THIS IS CORRECT
+#Dxa2023yy$Org.P = Dxa2023yy$TOTP - Dxa2023yy$PO4.P
 
-Dxa2023yy$Org.N = Dxa2023yy$TOTN - Dxa2023yy$NO3.N - Dxa2023yy$NH4.N
-Dxa2023yy$TDN = Dxa2023yy$TOTN - Dxa2023yy$Nitrogen.part
+#Dxa2023yy$Org.N = Dxa2023yy$TOTN - Dxa2023yy$NO3.N - Dxa2023yy$NH4.N
+#Dxa2023yy$TDN = Dxa2023yy$TOTN - Dxa2023yy$Nitrogen.part
 ```
 
 Make new summary table
@@ -707,12 +657,12 @@ Make new summary table
 #Dxa2023y$POC[Dxa2023y$POC < 0] <- 0       # Set negative values to 0
 
 #MAKE summary tables of parameters, remember to expand the variable selection!
-df.sum <- Dxa2023yy %>%
+df.sum <- dx23_C %>%
   group_by(Station.name) %>%
-  select(DOC,NH4.N:NO3.N, PO4.P:POC, TOC:TOTP_P, TDP:TDN) %>% # select variables to summarise, from and to
+  select(DOC,NH4.N:NO3.N, PO4.P:POC, TOC:TOTPP, TDP:TDN) %>% # select variables to summarise, from and to
   summarise(across(everything(), .f = list(mean = mean), na.rm = TRUE))
 
-names(df.sum)[names(df.sum) == 'TOTP_P_mean'] <- 'TOTP.P_mean'
+names(df.sum)[names(df.sum) == 'TOTPP_mean'] <- 'TOTP.P_mean'
 
 #Reshape summary table
 df.sum2 <- df.sum %>%
