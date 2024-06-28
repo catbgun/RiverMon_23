@@ -641,16 +641,6 @@ dx23_C$Org.P = dx23_C$TOTP - dx23_C$PO4.P
 dx23_C$Org.N = dx23_C$TOTN - dx23_C$NO3.N - dx23_C$NH4.N
 dx23_C$TDN = dx23_C$TOTN - dx23_C$Nitrogen.part
 ```
-
-```{r}
-#Dxa2023yy$POC = Dxa2023yy$TOC - Dxa2023yy$DOC
-#Dxa2023yy$TDP = Dxa2023yy$TOTP - Dxa2023yy$TOTPP #NOT SURE IF THIS IS CORRECT
-#Dxa2023yy$Org.P = Dxa2023yy$TOTP - Dxa2023yy$PO4.P
-
-#Dxa2023yy$Org.N = Dxa2023yy$TOTN - Dxa2023yy$NO3.N - Dxa2023yy$NH4.N
-#Dxa2023yy$TDN = Dxa2023yy$TOTN - Dxa2023yy$Nitrogen.part
-```
-
 Make new summary table
 ```{r}
 #Negative POC values replaced by zero
@@ -812,7 +802,6 @@ PO4_OrgP <- ggplot(subset(dfsum3x, chem %in% c("PO4.P", "Org.P")), aes(x=Station
 ```
 
 When using facet, the plot needs some more optimization as follows
-
 ```{r}
 #Following to make facet_wrap same width  
 gp <- ggplotGrob(PO4_OrgP)
@@ -834,7 +823,6 @@ plppy = grid::grid.draw(gp)
 ```
 
 saving the plot
-
 ```{r}
 ggsave(filename = "output8/Facet_PO4_OrgP.png",
        plot = gp,
@@ -917,11 +905,15 @@ ggsave(filename = "output8/N_frac.png",
 ### THg is typically treated separately since the results from the method was not previously in Aquamonitor
 - more sensitive method deployed
 - Hg 2023 data summarised already here: df.sum22
-- HAVE NOT INCLUDED CALCULATIONS FOR < LOD SINCE NOT IN FILE
+- HAVE NOT INCLUDED CALCULATIONS FOR < LOD SINCE NOT IN FILE. 240624: Info is in 20023 file. The data was not previously in Aquamonitro
 5-year mean and 2023 mean
 ```{r, THg load}
-THg_aveX <- read.table("THg_3yr.txt", header=TRUE, sep="\t", na.string=c(""))
-THg_aveX$Station.name <- revalue(THg_aveX$Station.name, c("Vegårdselva"="Storelva"))
+Sys.setlocale(locale="no_NO") 
+THg_aveX <- read.table("THg_4yr.txt", header=TRUE, sep="\t", na.string=c(""))
+THg_aveX$Station.name <- revalue(THg_aveX$Station.name, c("Veg†rdselva"="Storelva", "M†lselva"="Målselva", "Numedalsl†gen"="Numedalslågen", "Tanaelva"="Tana"))
+
+
+
 #a2023 <- read.table("ElvO_2023_Gen vannkjemi_V02.txt", header=TRUE, sep="\t", na.string=c(""))
 THg_aveX$THg2 <- as.numeric(THg_aveX$THg)
 
@@ -930,13 +922,13 @@ Hg.sum <- THg_aveX %>%
   select(THg2) %>% # select variables to summarise, from and to
   summarise(across(everything(), .f = list(mean = mean, sd=sd), na.rm = TRUE))
 
-Hg.sum$year <- "3-year mean"
+Hg.sum$year <- "4-year mean"
 names(Hg.sum)[names(Hg.sum) == 'THg2_mean'] <- 'xmean'
 names(Hg.sum)[names(Hg.sum) == 'THg2_sd'] <- 'xsd'
 
-Hg22 <- df.sum22[df.sum22$chem == "Hg" , ]
-Hg22x <- select(Hg22, -chem)
-AllHg <- rbind(Hg22x, Hg.sum)
+Hg23 <- df.sum23[df.sum23$chem == "Hg" , ]
+Hg23x <- select(Hg23, -chem)
+AllHg <- rbind(Hg23x, Hg.sum)
 ```
 
 ```{r, THg plot preparation}
@@ -952,12 +944,14 @@ AllHgx <- AllHg %>%
 Hgdfsum3 <- AllHgx %>% 
   group_by(year) %>% 
            mutate(year=factor(year,
-                     levels=c("3-year mean", "2023 mean")))
+                     levels=c("4-year mean", "2023 mean")))
 
 ```
 
 
 ```{r}
+unique(Hgdfsum3$Station.name)
+
 THg <- ggplot(Hgdfsum3, aes(x=Station.name, y=xmean, fill=year))  +
   geom_col( width=0.8, position=position_dodge())+
   geom_errorbar(aes(x=Station.name, ymin=pmax(xmean-xsd, 0), ymax=xmean+xsd),
