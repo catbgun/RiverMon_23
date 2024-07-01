@@ -122,27 +122,95 @@ five$Station.name <- revalue(five$Station.name, c("Numedalsl?en"="Numedalslågen
 five$Station.name <- revalue(five$Station.name, c("M?selv"="Målselva"))
 five$Station.name <- revalue(five$Station.name, c("Målselva"="Målselva"))
 
+# Change names for unity
+names(a2023)[names(a2023) == 'TSM'] <- 'SPM'
+names(five)[names(five) == 'TURB860'] <- 'Turbiditet'
+names(a2023)[names(a2023) == "TOTP_P"] <- "TOTPP"
+
+unique(a2023$Station.name)
+colnames(five)
 ```
-Glomma og Drammenselva: ekstra flomprøver ble tatt i august og enten må en av disse velges ut eller det må tas gjennomsnitt av disse før det tas årgjennomsnitt.Det ble tatt tre prøver på tvers av elvene. Ellers så vil de påvirke årsmiddelverdiene uforholdsmessig mye. Alternativt så kan du velge ut én av prøvene og utelate de to andre. Så vidt jeg husker var det veldig liten forskjell i verdier på tvers av elvene under flommen, noe som i seg selv er beroligende da vi vanligvis tar prøvene fra en av elvebreddene. 
-
-
-Running function to set <LOD to 0.5*LOQ
-Perhaps a good idea to have the detection frequency?
-Running the LOD function, 
-For the 5y average, the fomrmula works not by year and station. Might be sufficient for the figure. Or, try to adjust?
-```{r}
-Dxa2023yy <- cbind(a2023[2:3], apply(a2023[,-c(1:3), drop=F],2, dLimity))
-Dxfiveyy <-  cbind(five[3:4], apply(five[,-c(1:4), drop=F],2, dLimity))
-
-write.csv(Dxa2023yy, "C:/Users/CBG/OneDrive - NIVA/1 Projects/2022_Elveovervaakningen/RiverMonitoring_23/240624_CheckingLOformula.csv", row.names=FALSE)
-```
-
 Replacing columnnames for 2023 data (from Aquamonitor) to match 5-year data
 ```{r}
 # Convert Si to SiO2 in 2020-data
 #Dxa2020y$SiO2 <- Dxa2020y$Si*(60.0835/28.0855)
-# Change names for unity
-names(Dxa2023yy)[names(Dxa2023yy) == 'TSM'] <- 'SPM'
+
+```
+
+Glomma og Drammenselva: ekstra flomprøver ble tatt i august og enten må en av disse velges ut eller det må tas gjennomsnitt av disse før det tas årgjennomsnitt.Det ble tatt tre prøver på tvers av elvene. Ellers så vil de påvirke årsmiddelverdiene uforholdsmessig mye. Alternativt så kan du velge ut én av prøvene og utelate de to andre. Så vidt jeg husker var det veldig liten forskjell i verdier på tvers av elvene under flommen, noe som i seg selv er beroligende da vi vanligvis tar prøvene fra en av elvebreddene. 
+
+
+Running function to set <LOD to 0.5*LOQ
+Perhaps a good idea to have the detection frequency? then we need to go from wide to long format, first?
+```{r}
+#from wide to long format
+a23_long <- gather(a2023, parameter, value, Alk_4.5:Zn, factor_key=TRUE)
+five23_long <- gather(five, parameter, value, Qs:Ca, factor_key=TRUE)
+
+#here calculates detection frequency and n for all, but might not be the correct criteria for all sites
+#FROM SCREENING
+a23_freq = a23_long %>%
+  group_by(Station.name, parameter) %>%
+  mutate(lodcount = sum(lengths(regmatches(value, gregexpr("<", value)))),
+            n = (length(na.omit(value))),
+            det_frac = (100-(lodcount/n)*100))%>%
+  ungroup() 
+
+a23_freq2 <- subset(a23_freq, n!=0)
+
+a23_freq2$Sample.date <- as.Date(a23_freq2$Sample.date,format = "%d.%m.%Y")
+a23_freq2$year <- year(a23_freq2$Sample.date) 
+
+five23_long$Date <- as.Date(five23_long$Date,format = "%d.%m.%Y")
+five23_long$year <- year(five23_long$Date) 
+
+five23_freq = five23_long %>%
+  group_by(Station.name, parameter, year) %>%
+  mutate(lodcount = sum(lengths(regmatches(value, gregexpr("<", value)))),
+            n = (length(na.omit(value))),
+            det_frac = (100-(lodcount/n)*100))%>%
+  ungroup() 
+
+five23_freq2 <- subset(five23_freq, n!=0)
+five23_freq3 <-five23_freq2[!is.na(five23_freq2$value),]
+```
+
+The idea below is to, by station.name, year and parameter to ensure that observations < LOD are only calculated to 0.5 x LOD if the number of observations is suffucuently high. 
+```{r count no of observations}
+unique(a23_freq2$n)
+unique(five23_freq3$n)
+
+#those with n < 5 can have the <LOD set to zero
+#those with n > can have the <LOD set to 0.5 LOD
+
+#to make the <lod with few observations to zero
+#SE HER
+five23_freq4 = five23_freq3 %>%
+  group_by(Station.name, parameter, year) %>%
+  mutate(value2 = case_when(n< 5 & grepl("<", value) ~ "0", 
+                            n> 5 & !grepl("<", value)~ value,
+                            n> 5 & grepl("<", value)~ value,
+                            n< 5 & !grepl("<", value)~ value))
+
+a23_freq3 = a23_freq2 %>%
+  group_by(Station.name, parameter, year) %>%
+  mutate(value2 = case_when(n< 5 & grepl("<", value) ~ "0", #was a problem with mixing numeric and characyer
+                            n> 5 & !grepl("<", value)~ value,
+                            n> 5 & grepl("<", value)~ value,
+                            n< 5 & !grepl("<", value)~ value))
+```
+#runnning the function that converts from "<lod" to 0.5lod
+```{r}
+five23_lod <- five23_freq4 %>%
+  group_by(Station.name, year, parameter) %>%
+  mutate(value3 = dLimity(value2))%>%
+  ungroup()
+
+a23_freq_lod <- a23_freq3 %>%
+  group_by(Station.name, year, parameter) %>%
+  mutate(value3 = dLimity(value2))%>%
+  ungroup()
+
 ```
 
 ### 1.1) Create averages for the 5-year average
@@ -150,81 +218,41 @@ Bargraphs, dodged of main chemical variables. 2023-annual average for each river
 First, make annual averages of the 5-year mean data. Or else the error bars in the figures will be wrong.
 
 ```{r Make annual averages of 5-year data}
-Dxfiveyy$Dates <- as.Date(Dxfiveyy$Date,format = "%d.%m.%Y")
-Dxfiveyy$Year <- format(Dxfiveyy$Dates, format="%Y")
-names(Dxfiveyy)[names(Dxfiveyy) == 'TURB860'] <- 'Turbiditet'
-
 #MAKE summary tables of parameters, remember to expand the variable selection!
 #First, summary per year
-fo <- Dxfiveyy %>%
-  group_by(Station.name, Year) %>%
-  select(pH, Turbiditet:Ca) %>% # select variables to summarise, from and to
+fo <- five23_lod %>%
+  group_by(Station.name, year, parameter) %>%
+  select(value3) %>% # select variables to summarise, from and to
   summarise(across(everything(), .f = list(mean = mean), na.rm = TRUE))
 
 #then, summary together, 5-year with sd
 fox<- fo %>%
-  group_by(Station.name) %>%
-  select(pH_mean:Ca_mean)%>%
+  group_by(Station.name, parameter) %>%
+  select(value3_mean)%>%
   summarise(across(everything(), .f = list(mean = mean, sd=sd), na.rm = TRUE))
 
-#Reshape summary table
-foxy <- fox %>%
-  pivot_longer(
-    cols = !c(Station.name), #specify columns we want to pivot
-    names_sep = "_",
-    names_to  = c("chem","mu", ".value"))
-
-foxy <- foxy[-(3)]
-names(foxy) <- c("Station.name", "chem", "xmean", "xsd")
-foxy$year <- "5-year mean"
-foxy = foxy %>% relocate(year, .after = "Station.name")
+#foxy <- foxy[-(3)]
+names(fox) <- c("Station.name", "chem", "xmean", "xsd")
+fox$year <- "5-year mean"
+foxy = fox %>% relocate(year, .after = "Station.name")
 ```
-
-```{r Need to handle the additional samples }
-#First make date without time to be able to aggregate the samples from the same date
-Dxa2023yy$Sample.dateS <- as.Date(Dxa2023yy$Sample.date,format = "%d.%m.%Y")
-
-```
-
-
-Summarising the 2023 data, why not possible to add n?
+Summarising the 2023 data. need to take extra flood samples into consideration
 ```{r}
-#names(Dxa2022y)[names(Dxa2022y) == 'TURB860'] <- 'Turbiditet'
-
 #Blir det riktig dersom vi tar gjennomsnitt med group station.name og date? spesielt med tanke på flomprøvene
-#particulate P is needed for later. must be renamed
-names(Dxa2023yy)[names(Dxa2023yy) == "TOTP_P"] <- "TOTPP"
-
-dx23_C <- Dxa2023yy %>%
-  group_by(Station.name, Sample.dateS) %>%
-  select(Ca:DOC, NH4.N:POC, SiO2, TOC:TOTPP, SPM:Turbiditet, As:Cd, Cr:Hg, Ni, Pb, Zn) %>% # select variables to summarise, from and to
+aa23 <- a23_freq_lod %>%
+  group_by(Station.name, Sample.date, parameter) %>%
+  select(value3) %>% # select variables to summarise, from and to
   summarise(across(everything(), .f = list(mean = mean), na.rm = TRUE))
 
-for ( col in 1:ncol(dx23_C)){
-    colnames(dx23_C)[col] <-  sub("_.*", "", colnames(dx23_C)[col])
-}
-
-write.csv(dx23_C, "240624_CheckingDATA23_flood.csv", row.names=FALSE)
-
-dx23 <- dx23_C %>%
-  group_by(Station.name) %>%
-  select(Ca:DOC, NH4.N:POC, SiO2, TOC:TOTPP, SPM:Turbiditet, As:Cd, Cr:Hg, Ni, Pb, Zn) %>% # select variables to summarise, from and to
+aa23x <- aa23 %>%
+  group_by(Station.name, parameter) %>%
+  select(value3_mean) %>% # select variables to summarise, from and to
   summarise(across(everything(), .f = list(mean = mean, sd=sd), na.rm = TRUE))
 
-#Reshape summary table
-df.sum23 <- dx23 %>%
-  pivot_longer(
-    cols = !c(Station.name), #specify columns we want to pivot
-    names_sep = "_",
-    names_to  = c("chem", ".value"))
+names(aa23x) <- c("Station.name", "chem", "xmean", "xsd")
+aa23x$year <- "2023 mean"
+df.sum23 = aa23x %>% relocate(year, .after = "Station.name")
 
-df.sum23$year <- "2023 mean"
-
-names(df.sum23) <- c("Station.name", "chem", "xmean", "xsd", "year")
-df.sum23 = df.sum23 %>% relocate(year, .after = "Station.name")
-
-#Sjekke data i excel
-write.csv(df.sum23, "240624_CheckingDATA23.csv", row.names=FALSE)
 ```
 
 Add the two together and make new summary table. select only those parameters to be used for the automatic plotting
@@ -232,7 +260,15 @@ Add the two together and make new summary table. select only those parameters to
 # 6) Merge the two datasets
 All <- rbind(df.sum23, foxy)
 #only those parameters with regular bargraphs, nothing special
-dfsum2 = All %>% filter(str_detect(chem,"Ca|Turbiditet|SPM|SiO2|TOC|TOTN|TOTP|As|Pb|Cd|Cu|Zn|Cr|PO4|pH|Ni"))
+print(unique(All$chem))
+#dfsum2y <-  subset(All, chem== c ("Ca", "Turbiditet", "SPM", "SiO2", "TOC", "TOTN", "TOTP", "As", "Pb", "Cd", "Cu", "Zn", "Cr", "PO4", "pH", "Ni"))
+
+dfsum2 = All  %>% filter(str_detect(chem,"Ca|Turbiditet|SPM|SiO2|TOC|TOTN|TOTP|As|Pb|Cd|Cu|Zn|Cr|PO4|pH|Ni"))
+
+unique(All$chem)
+
+write.csv(All, "240701_test.csv")
+write.csv(dfsum2y, "240701_test2.csv")
 ```
 Silica comes later with perfect y-axis label. 
 Use the following for making automatised figures with correct axis-titles. BUT make sure to only include those variables you will plot. 
@@ -346,7 +382,7 @@ if (dir.exists("output7")) {
 } else {dir.create("output7")
   }
 
-ggsave(filename = paste0("output8/",
+ggsave(filename = paste0("output9/",
                          chems[i],
                          "_plot.png"),
        plot = ploy,
@@ -354,7 +390,7 @@ ggsave(filename = paste0("output8/",
 
 }
 
-
+summary(All)
 ```
 
 Now pH needs a set y-axis, not starting with zero
@@ -389,7 +425,7 @@ pH22 <- ggplot(subset(dfsum3, chem %in% c("pH")) , aes(x=Station.name, y=xmean, 
   coord_cartesian(ylim = c(5, 8.5))+
   scale_y_continuous(breaks=c(5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5), labels = fmt_dcimals(1))
 
-ggsave(filename = "output8/pH22_scale.png",
+ggsave(filename = "output9/pH22_scale.png",
        plot = pH22,
        width = 11, height = 8.5, units = "in")
 
@@ -436,7 +472,7 @@ Si22_2 <- ggplot(subset(dfsum3, chem %in% c("SiO2")) , aes(x=Station.name, y=xme
 
 Some trixing needs to be done to make the facets have the approperiate width
 ```{r}
-ggsave(filename = "output8/Si22_2.png",
+ggsave(filename = "output9/Si22_2.png",
        plot = Si22_2,
        width = 11, height = 8.5, units = "in")
 ```
@@ -494,7 +530,7 @@ plppy = grid::grid.draw(gp)
 print(plppy)
 print(gp)
 
-ggsave(filename = "output8/TOTP22_Facet.png",
+ggsave(filename = "output9/TOTP22_Facet.png",
        plot = gp,
        width = 11, height = 8.5, units = "in")
 
@@ -550,7 +586,7 @@ plppy = grid::grid.draw(gp)
 print(plppy)
 print(gp)
 
-ggsave(filename = "output8/PO422_Facet.png",
+ggsave(filename = "output9/PO422_Facet.png",
        plot = gp,
        width = 11, height = 8.5, units = "in")
 
@@ -615,7 +651,7 @@ plppy = grid::grid.draw(gp)
 print(plppy)
 print(gp)
 
-ggsave(filename = "output8/Ni22_Facet.png",
+ggsave(filename = "output9/Ni22_Facet.png",
        plot = gp,
        width = 11, height = 8.5, units = "in")
 
