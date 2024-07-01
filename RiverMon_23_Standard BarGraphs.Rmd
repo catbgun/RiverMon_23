@@ -37,14 +37,18 @@ lapply(Packages, library, character.only = TRUE)
 The following function will replace all "<LOD"
 - har det no å si om det er mellomrm mellom < og tallet?
 ```{r echo = T, results = 'hide'}
-dLimitx <- function(v){
-  v <- as.character(v)
-  isLimit <- grepl("<", v)  #grepl() is a built-in R function looks for a smaller string of characters
-  n <- (sum(isLimit)/(sum(!isLimit)+sum(isLimit)))*100
-  v[isLimit] <- as.numeric(gsub("<(.*)", "\\1", v[isLimit]))*(100-n)/100 #gsub(pattern, replacement, x) for substitution
-  as.numeric(v)
-}
+#LOD treatment in accordance with OSPAR
+#dLimitx <- function(v){
+#  v <- as.character(v)
+#  isLimit <- grepl("<", v)  #grepl() is a built-in R function looks for a smaller string of characters
+#  n <- (sum(isLimit)/(sum(!isLimit)+sum(isLimit)))*100
+#  v[isLimit] <- as.numeric(gsub("<(.*)", "\\1", v[isLimit]))*(100-n)/100 #gsub(pattern, replacement, x) for substitution
+#  as.numeric(v)
+#}
+```
 
+```{r echo = T, results = 'hide'}
+#to set number of decimal in figures
 fmt_dcimals <- function(decimals=1){
   function(x) format(x,nsmall = decimals,scientific = FALSE)
 }
@@ -91,7 +95,7 @@ Sys.setlocale(locale="no_NO")
 #a2022 <- read.table("ElvO_2022_Gen vannkjemi_V02.txt", header=TRUE, sep="\t", na.string=c(""))
 a2023 <- read.table("ElvO 2023_Gen vannkjemi.txt", header=TRUE, sep="\t", na.string=c(""))
 five <- read.table("Av5year_23.txt", header=TRUE, sep="\t", na.string=c(""))
-head(five)
+
 ```
 
 Fix names of stations that have been misspelled by excel formatting
@@ -120,21 +124,25 @@ five$Station.name <- revalue(five$Station.name, c("Tanaelva"="Tana"))
 #five$Station.name <- revalue(five$Station.name, c("Vikdalselva"="Vikedalselva"))
 five$Station.name <- revalue(five$Station.name, c("Numedalsl?en"="Numedalslågen"))
 five$Station.name <- revalue(five$Station.name, c("M?selv"="Målselva"))
-five$Station.name <- revalue(five$Station.name, c("Målselva"="Målselva"))
+five$Station.name <- revalue(five$Station.name, c("M<e5>lselv"="Målselva"))
 
 # Change names for unity
 names(a2023)[names(a2023) == 'TSM'] <- 'SPM'
 names(five)[names(five) == 'TURB860'] <- 'Turbiditet'
 names(a2023)[names(a2023) == "TOTP_P"] <- "TOTPP"
 
-unique(a2023$Station.name)
-colnames(five)
+unique(five$Station.name)
 ```
 Replacing columnnames for 2023 data (from Aquamonitor) to match 5-year data
 ```{r}
 # Convert Si to SiO2 in 2020-data
 #Dxa2020y$SiO2 <- Dxa2020y$Si*(60.0835/28.0855)
-
+a2023$POC = a2023$TOC - a2023$DOC
+a2023$TDP = a2023$TOTP - a2023$TOTPP #NOT SURE IF THIS IS CORRECT
+a2023$Org.P = a2023$TOTP - a2023$PO4.P
+unique(colnames(a2023))
+a23_freq_lod$Org.N = a23_freq_lod$TOTN - a23_freq_lod$NO3.N - a23_freq_lod$NH4.N
+a23_freq_lod$TDN = a23_freq_lod$TOTN - a23_freq_lod$Nitrogen.part
 ```
 
 Glomma og Drammenselva: ekstra flomprøver ble tatt i august og enten må en av disse velges ut eller det må tas gjennomsnitt av disse før det tas årgjennomsnitt.Det ble tatt tre prøver på tvers av elvene. Ellers så vil de påvirke årsmiddelverdiene uforholdsmessig mye. Alternativt så kan du velge ut én av prøvene og utelate de to andre. Så vidt jeg husker var det veldig liten forskjell i verdier på tvers av elvene under flommen, noe som i seg selv er beroligende da vi vanligvis tar prøvene fra en av elvebreddene. 
@@ -213,6 +221,8 @@ a23_freq_lod <- a23_freq3 %>%
 
 ```
 
+
+
 ### 1.1) Create averages for the 5-year average
 Bargraphs, dodged of main chemical variables. 2023-annual average for each river including stdev error bars together with previous maximum 5-year for comparison.
 First, make annual averages of the 5-year mean data. Or else the error bars in the figures will be wrong.
@@ -260,10 +270,12 @@ Add the two together and make new summary table. select only those parameters to
 # 6) Merge the two datasets
 All <- rbind(df.sum23, foxy)
 #only those parameters with regular bargraphs, nothing special
-print(unique(All$chem))
-#dfsum2y <-  subset(All, chem== c ("Ca", "Turbiditet", "SPM", "SiO2", "TOC", "TOTN", "TOTP", "As", "Pb", "Cd", "Cu", "Zn", "Cr", "PO4", "pH", "Ni"))
+#print(unique(All$chem))
+print(unique(All$Station.name))
+dfsum2x <- All  %>% 
+  filter(chem %in% c("Ca", "Turbiditet", "SPM", "SiO2", "TOC", "TOTN", "TOTP", "As", "Pb", "Cd", "Cu", "Zn", "Cr", "PO4", "pH", "Ni"))
 
-dfsum2 = All  %>% filter(str_detect(chem,"Ca|Turbiditet|SPM|SiO2|TOC|TOTN|TOTP|As|Pb|Cd|Cu|Zn|Cr|PO4|pH|Ni"))
+dfsum2 = dfsum2x  %>% filter(str_detect(chem,"Ca|Turbiditet|SPM|SiO2|TOC|TOTN|TOTP|As|Pb|Cd|Cu|Zn|Cr|PO4|pH|Ni"))
 
 unique(All$chem)
 
